@@ -294,12 +294,15 @@ export class RepositoryWorkspace {
 
         if (col !== -1) {
           matches.push({
-            filePath,
-            lineNumber: i + 1,
-            columnNumber: col + 1,
-            lineContent: line,
-            preview: line.trim()
-          });
+  filePath,
+  line: i + 1,
+  lineText: line,
+  startLine: i + 1,
+  endLine: i + 1,
+  contextLines: [],
+  lineNumber: i + 1,
+  columnNumber: col + 1
+});
 
           if (matches.length >= maxResults) {
             return matches;
@@ -345,7 +348,26 @@ export class RepositoryWorkspace {
 
   toRepositoryRecord(): Repository {
     const stats = this.getRepositoryStats();
-    const primaryLang = (stats.jsFileCount ?? 0) > 0 ? 'JavaScript' : ((stats.pythonFileCount ?? 0) > 0 ? 'Python' : 'Multi-language');
+    const hasJavaScript = this.jsFiles.some(f =>
+  /\.(js|jsx|mjs|cjs)$/i.test(f.path)
+);
+
+const hasTypeScript = this.jsFiles.some(f =>
+  /\.(ts|tsx)$/i.test(f.path)
+);
+
+const hasPython = (stats.pythonFileCount ?? 0) > 0;
+
+const primaryLang =
+  hasPython && (hasJavaScript || hasTypeScript)
+    ? 'Multi-language'
+    : hasPython
+      ? 'Python'
+      : hasTypeScript && !hasJavaScript
+        ? 'TypeScript'
+        : hasJavaScript
+          ? 'JavaScript'
+          : 'Multi-language';
     return {
       id: `repo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: this.repositoryName,
@@ -373,8 +395,23 @@ export class RepositoryWorkspace {
   }
 
   toRepositorySummary(): Repository {
-    return this.toRepositoryRecord();
-  }
+  const record = this.toRepositoryRecord();
+
+  const normalizedPrimaryLanguage =
+  record.primaryLanguage === 'JavaScript'
+    ? 'javascript'
+    : record.primaryLanguage === 'TypeScript'
+      ? 'typescript'
+      : record.primaryLanguage === 'Python'
+        ? 'python'
+        : record.primaryLanguage === 'Multi-language'
+          ? 'multi'
+          : record.primaryLanguage;
+  return {
+    ...record,
+    primaryLanguage: normalizedPrimaryLanguage,
+  };
+}
 
   // Structural Inspection Convenience API
   findFunctions(name: string): FunctionDefinition[] {

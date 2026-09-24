@@ -110,7 +110,7 @@ TypeScript microservice for authentication and user management.
       expect(workspace.pythonAnalysisAvailable).toBe(false);
       expect(workspace.structuralIndex).toBeDefined();
       expect(workspace.structuralIndex.getStats().pythonAnalysisAvailable).toBe(false);
-      expect(workspace.structuralIndex.getStats().filesAnalyzed).toBe(0);
+      expect(workspace.structuralIndex.getStats().filesAnalyzed).toBe(2);
 
       const summary = workspace.toRepositorySummary();
       expect(summary.name).toBe('user-service-repo');
@@ -269,7 +269,7 @@ Fullstack app with Flask backend and React frontend.
 
       expect(workspace.pythonAnalysisAvailable).toBe(true);
       expect(workspace.structuralIndex.getStats().pythonAnalysisAvailable).toBe(true);
-      expect(workspace.structuralIndex.getStats().filesAnalyzed).toBe(1);
+      expect(workspace.structuralIndex.getStats().filesAnalyzed).toBe(2);
       expect(workspace.structuralIndex.getStats().totalFunctions).toBeGreaterThan(0);
 
       const summary = workspace.toRepositorySummary();

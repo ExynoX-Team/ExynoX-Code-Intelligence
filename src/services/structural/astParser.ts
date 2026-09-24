@@ -197,21 +197,15 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
             const asname = alias.asname || undefined;
             const line = alias.lineno || node.lineno || 1;
             imports.push({
-              sourceModule: modName,
-              importedName: modName,
-              alias: asname,
-              filePath,
-              line,
-              isFromImport: false
-            });
-            importedSymbols.add(asname || modName);
-            references.push({
-              symbol: modName,
-              filePath,
-              line,
-              containingScope: scope.currentFunction || scope.currentClass || '<module>',
-              contextKind: 'import'
-            });
+  sourceModule: modName,
+  importedName: modName,
+  alias: asname,
+  filePath,
+  startLine: line,
+  endLine: node.end_lineno || line,
+  line,
+  isFromImport: false
+});
           }
         }
         break;
@@ -225,22 +219,26 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
             const impName = alias.name || '';
             const asname = alias.asname || undefined;
             const line = alias.lineno || node.lineno || 1;
-            imports.push({
-              sourceModule: modName,
-              importedName: impName,
-              alias: asname,
-              filePath,
-              line,
-              isFromImport: true
-            });
+          imports.push({
+  sourceModule: modName,
+  importedName: impName,
+  alias: asname,
+  filePath,
+  startLine: line,
+  endLine: node.end_lineno || line,
+  line,
+  isFromImport: true
+});
             importedSymbols.add(asname || impName);
             references.push({
-              symbol: impName,
-              filePath,
-              line,
-              containingScope: scope.currentFunction || scope.currentClass || '<module>',
-              contextKind: 'import'
-            });
+  symbol: modName,
+  filePath,
+  startLine: line,
+  endLine: line,
+  line,
+  containingScope: scope.currentFunction || scope.currentClass || '<module>',
+  contextKind: 'import'
+});
           }
         }
         break;
@@ -258,13 +256,15 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
 
         // Record base class references
         for (const base of baseClasses) {
-          references.push({
-            symbol: base,
-            filePath,
-            line: startLine,
-            containingScope: className,
-            contextKind: 'base_class'
-          });
+         references.push({
+  symbol: base,
+  filePath,
+  startLine,
+  endLine: startLine,
+  line: startLine,
+  containingScope: className,
+  contextKind: 'base_class'
+});
         }
 
         const classDoc = extractDocstring(node.body);
@@ -389,21 +389,25 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
           }
 
           calls.push({
-            caller,
-            callee: calleeSymbol,
-            filePath,
-            line,
-            confidence,
-            containingClass: scope.currentClass
-          });
+  caller,
+  callee: calleeSymbol,
+  filePath,
+  startLine: line,
+  endLine: line,
+  line,
+  confidence,
+  containingClass: scope.currentClass
+});
 
-          references.push({
-            symbol: calleeSymbol,
-            filePath,
-            line,
-            containingScope: caller,
-            contextKind: 'call'
-          });
+         references.push({
+  symbol: calleeSymbol,
+  filePath,
+  startLine: line,
+  endLine: line,
+  line,
+  containingScope: scope.currentFunction || scope.currentClass || '<module>',
+  contextKind: 'call'
+});
         }
         break;
       }
@@ -424,6 +428,7 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
               assignments.push({
                 variableName: varName,
                 filePath,
+                startLine: line,
                 line,
                 endLine,
                 isModuleLevel: scope.isModuleLevel,
@@ -453,6 +458,7 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
             assignments.push({
               variableName: varName,
               filePath,
+              startLine: line,
               line,
               endLine,
               isModuleLevel: scope.isModuleLevel,
@@ -471,12 +477,14 @@ export function parsePythonSource(filePath: string, sourceText: string): PythonF
       case 'Name': {
         if (node.id && node.ctx?.nodeType === 'Load') {
           references.push({
-            symbol: node.id,
-            filePath,
-            line: node.lineno || 1,
-            containingScope: scope.currentFunction || scope.currentClass || '<module>',
-            contextKind: 'variable_usage'
-          });
+  symbol: node.id,
+  filePath,
+  startLine: node.lineno || 1,
+  endLine: node.end_lineno || node.lineno || 1,
+  line: node.lineno || 1,
+  containingScope: scope.currentFunction || scope.currentClass || '<module>',
+  contextKind: 'variable_usage'
+});
         }
         break;
       }
