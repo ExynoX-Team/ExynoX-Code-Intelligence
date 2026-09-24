@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <script>
+      (function() {
+        try {
+          if (typeof window !== 'undefined') {
+            // Intercept window.onerror and unhandledrejection immediately
+            var origOnError = window.onerror;
+            window.onerror = function(message, source, lineno, colno, error) {
+              var msg = String(message || (error && error.message) || '');
+              if (msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1) {
+                return true; // suppresses error
+              }
+              if (typeof origOnError === 'function') {
+                return origOnError.apply(this, arguments);
+              }
+              return false;
+            };
+
+            window.addEventListener('error', function(event) {
+              var msg = String((event && event.message) || (event && event.error && event.error.message) || '');
+              if (msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1) {
+                if (event.preventDefault) event.preventDefault();
+                if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                return true;
+              }
+            }, true);
+
+            var originalFetch = window.fetch;
+            var currentFetch = originalFetch;
+
+            // 1. Patch entire prototype chain (Window, WindowProperties, EventTarget, etc.)
+            var curr = window;
+            while (curr) {
+              try {
+                var desc = Object.getOwnPropertyDescriptor(curr, 'fetch');
+                if (desc) {
+                  if (desc.configurable) {
+                    Object.defineProperty(curr, 'fetch', {
+                      get: function() { return currentFetch; },
+                      set: function(fn) { currentFetch = fn; },
+                      configurable: true,
+                      enumerable: true
+                    });
+                  }
+                }
+              } catch (_e) {}
+              try {
+                curr = Object.getPrototypeOf(curr);
+              } catch (_e2) {
+                break;
+              }
+            }
+
+            // 2. Also ensure window itself has an explicit setter
+            try {
+              Object.defineProperty(window, 'fetch', {
+                get: function() { return currentFetch; },
+                set: function(fn) { currentFetch = fn; },
+                configurable: true,
+                enumerable: true
+              });
+            } catch (_e3) {
+              try {
+                window.fetch = originalFetch;
+              } catch (_e4) {}
+            }
+          }
+        } catch (_outerErr) {}
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ExynoX Code Intelligence</title>
+    <meta name="description" content="Agentic code intelligence system for large Python codebases — Samsung PRISM GenAI Hackathon 2026–27." />
+    <meta property="og:title" content="ExynoX Code Intelligence" />
+    <meta property="og:description" content="Agentic code intelligence system for large Python codebases — Samsung PRISM GenAI Hackathon 2026–27." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#090d16] text-[#e2e8f0] antialiased min-h-screen selection:bg-cyan-500/20 selection:text-cyan-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

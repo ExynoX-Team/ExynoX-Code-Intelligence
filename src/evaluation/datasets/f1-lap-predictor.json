@@ -1,0 +1,178 @@
+{
+  "id": "f1-lap-predictor-benchmark",
+  "name": "F1 Lap Time Predictor Benchmark",
+  "description": "Standard ground-truth benchmark suite for Formula 1 telemetry prediction codebase (Samsung PRISM Hackathon Theme 1).",
+  "version": "1.0.0",
+  "targetRepository": "f1-lap-time-predictor",
+  "queries": [
+    {
+      "id": "q001_usage_predictor",
+      "query": "Where is the prediction model used?",
+      "description": "Locate pipeline execution where LapTimePredictor model is instantiated and used to infer lap times",
+      "expectedEvidence": [
+        {
+          "file": "pipeline/predict.py",
+          "startLine": 10,
+          "endLine": 42
+        }
+      ],
+      "expectedSymbols": [
+        "run_race_prediction_pipeline",
+        "LapTimePredictor.predict"
+      ],
+      "queryType": "usage",
+      "tags": ["pipeline", "model", "usage"]
+    },
+    {
+      "id": "q002_definition_lap_degradation",
+      "query": "Where is calculate_lap_time_degradation defined?",
+      "description": "Find exact definition of calculate_lap_time_degradation in degradation model",
+      "expectedEvidence": [
+        {
+          "file": "models/degradation.py",
+          "startLine": 19,
+          "endLine": 52
+        }
+      ],
+      "expectedSymbols": [
+        "calculate_lap_time_degradation"
+      ],
+      "queryType": "definition",
+      "tags": ["ast", "definition"]
+    },
+    {
+      "id": "q003_caller_degradation",
+      "query": "Who calls calculate_lap_time_degradation?",
+      "description": "Static caller analysis for calculate_lap_time_degradation",
+      "expectedEvidence": [
+        {
+          "file": "pipeline/predict.py",
+          "startLine": 10,
+          "endLine": 42
+        }
+      ],
+      "expectedSymbols": [
+        "run_race_prediction_pipeline"
+      ],
+      "queryType": "caller",
+      "tags": ["ast", "caller"]
+    },
+    {
+      "id": "q004_callee_pipeline",
+      "query": "What does run_race_prediction_pipeline call?",
+      "description": "Static callee discovery for race prediction pipeline",
+      "expectedEvidence": [
+        {
+          "file": "pipeline/predict.py",
+          "startLine": 10,
+          "endLine": 42
+        }
+      ],
+      "expectedSymbols": [
+        "calculate_lap_time_degradation",
+        "load_dataset",
+        "predict"
+      ],
+      "queryType": "callee",
+      "tags": ["ast", "callee"]
+    },
+    {
+      "id": "q005_import_driver",
+      "query": "Which files import models.driver?",
+      "description": "Locate files that import driver domain model",
+      "expectedEvidence": [
+        {
+          "file": "pipeline/predict.py",
+          "startLine": 1,
+          "endLine": 8
+        },
+        {
+          "file": "data/loader.py",
+          "startLine": 1,
+          "endLine": 8
+        }
+      ],
+      "expectedSymbols": [
+        "Driver",
+        "models.driver"
+      ],
+      "queryType": "import",
+      "tags": ["ast", "imports"]
+    },
+    {
+      "id": "q006_call_chain_main_to_predict",
+      "query": "Show call chain from main to predict",
+      "description": "Multi-hop static call chain trace from main entry point to predict",
+      "expectedEvidence": [
+        {
+          "file": "main.py",
+          "startLine": 1,
+          "endLine": 40
+        },
+        {
+          "file": "pipeline/predict.py",
+          "startLine": 10,
+          "endLine": 42
+        }
+      ],
+      "expectedSymbols": [
+        "main",
+        "run_race_prediction_pipeline",
+        "predict"
+      ],
+      "queryType": "call_chain",
+      "tags": ["ast", "call_chain"]
+    },
+    {
+      "id": "q007_count_functions",
+      "query": "How many functions are in the repository?",
+      "description": "Total AST function count query",
+      "expectedCount": 8,
+      "queryType": "count",
+      "tags": ["ast", "count"]
+    },
+    {
+      "id": "q008_semantic_telemetry_dataset",
+      "query": "Where is telemetry data parsed and loaded from CSV?",
+      "description": "Semantic retrieval for telemetry loader parsing CSV records",
+      "expectedEvidence": [
+        {
+          "file": "data/loader.py",
+          "startLine": 11,
+          "endLine": 35
+        }
+      ],
+      "expectedSymbols": [
+        "load_dataset"
+      ],
+      "queryType": "semantic",
+      "tags": ["semantic", "data"]
+    },
+    {
+      "id": "q009_semantic_auth_login",
+      "query": "Where is authentication handled and how are user sessions validated?",
+      "description": "Locate telemetry engineer login and session token validation",
+      "expectedEvidence": [
+        {
+          "file": "auth/login.py",
+          "startLine": 15,
+          "endLine": 40
+        }
+      ],
+      "expectedSymbols": [
+        "authenticate_user",
+        "validate_session_token",
+        "login_user"
+      ],
+      "queryType": "semantic",
+      "tags": ["auth", "security"]
+    },
+    {
+      "id": "q010_no_ground_truth_test",
+      "query": "Are there any future supersonic aerodynamic wind tunnel simulations planned?",
+      "description": "Negative testing query with deliberately no ground truth to verify 'Not evaluated — ground truth unavailable'",
+      "queryType": "retrieval",
+      "tags": ["negative_test", "unseen"]
+    }
+  ]
+}

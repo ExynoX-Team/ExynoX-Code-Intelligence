@@ -1,0 +1,6 @@
+{
+  "name": "ExynoX Code Intelligence",
+  "description": "Agentic code intelligence system for large Python codebases — Samsung PRISM GenAI Hackathon 2026–27.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
