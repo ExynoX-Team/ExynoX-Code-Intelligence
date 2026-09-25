@@ -69,7 +69,7 @@ export function ExynoxLogo({ className = '', size = 'md' }: ExynoxLogoProps) {
 
   return (
     <img
-      src="/exynox-logo.png"
+      src={`${import.meta.env.BASE_URL}exynox-logo.png`}
       alt="ExynoX Logo"
       className={`${dim.box} object-contain transition-opacity ${className}`}
       onError={() => setImageError(true)}
