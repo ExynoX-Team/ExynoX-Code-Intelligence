@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/ExynoX-Code-Intelligence/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
