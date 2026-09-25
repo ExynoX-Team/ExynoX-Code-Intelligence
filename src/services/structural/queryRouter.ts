@@ -40,10 +40,6 @@ export function routeStructuralQuery(
   index: StructuralIndex,
   workspace: RepositoryWorkspace
 ): StructuralSearchOutcome {
-  if (index.getStats().pythonAnalysisAvailable === false) {
-    return { handled: false, findings: [] };
-  }
-
   const normalized = query.trim().replace(/\?+$/, '');
   const lower = normalized.toLowerCase();
 
