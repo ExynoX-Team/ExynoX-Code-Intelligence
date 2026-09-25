@@ -190,6 +190,7 @@ async function startServer() {
             }
           });
         } catch (callErr: unknown) {
+          console.error('GEMINI RAW ERROR:', callErr);
           const parsed = parseErrorStatusAndMessage(callErr, 503);
           logProviderError('gemini', primaryModel, parsed.status);
           return res.status(parsed.status).json({
