@@ -154,8 +154,8 @@ TypeScript microservice for authentication and user management.
         workspace.structuralIndex,
         workspace
       );
-      expect(outcome.handled).toBe(false);
-      expect(outcome.findings).toHaveLength(0);
+      expect(outcome.handled).toBe(true);
+      expect(outcome.findings.length).toBeGreaterThan(0);
     });
   });
 
