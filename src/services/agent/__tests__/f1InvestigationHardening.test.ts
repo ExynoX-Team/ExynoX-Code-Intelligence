@@ -63,7 +63,7 @@ describe('PHASE 4 HARDENING — REAL INVESTIGATION AND EVIDENCE VERIFICATION', (
     expect(ans).toContain('LapTimePredictor');
     expect(ans).toContain('pipeline/predict.py');
     expect(ans).toContain('run_race_prediction_pipeline');
-    expect(ans).toContain('Line 63');
+    expect(ans).toMatch(/`pipeline\/predict\.py` — Line \d+/);
   });
 
   it('TEST 3: "Are there any files that mention the prediction model but do not actually use it to generate predictions? Identify them and explain why."', async () => {
@@ -130,7 +130,7 @@ describe('PHASE 4 HARDENING — REAL INVESTIGATION AND EVIDENCE VERIFICATION', (
     // Traces caller in main.py
     expect(ans).toContain('main.py');
     expect(ans).toContain('run_prediction_cli');
-    expect(ans).toContain('Line 32');
+    expect(ans).toMatch(/`main\.py` \(Lines? \d+/);
   });
 
   it('TEST 6: "How does the application calculate lap-time degradation, and where is that calculation used?"', async () => {

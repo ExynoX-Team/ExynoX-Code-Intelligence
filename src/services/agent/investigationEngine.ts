@@ -349,12 +349,15 @@ export class InvestigationEngine {
       // Find the last referenced function/symbol from history
       const prevTurn = history[history.length - 1];
       // Check if previous answer or evidence references key functions
-      for (const fn of ['run_race_prediction_pipeline', 'calculate_lap_time_degradation', 'predict']) {
-        if (prevTurn.answer.includes(fn)) {
-          targetSymbol = fn;
-          break;
-        }
-      }
+      // Find the last referenced function/symbol from previous evidence.
+// Prefer the most recent concrete symbol rather than hardcoding repository-specific names.
+const foundEvidence = prevTurn.evidence.find(
+  e => e.symbolName && (e.relationshipType === 'usage' || e.symbolType === 'function')
+);
+
+if (foundEvidence?.symbolName) {
+  targetSymbol = foundEvidence.symbolName;
+}
       if (!targetSymbol) {
         const foundEvidence = prevTurn.evidence.find(e => e.relationshipType === 'usage' || e.symbolType === 'function' || e.symbolName);
         if (foundEvidence?.symbolName) {
@@ -363,11 +366,19 @@ export class InvestigationEngine {
       }
     }
 
-    // Direct symbol mentions in query
-    for (const fn of ['run_race_prediction_pipeline', 'calculate_lap_time_degradation', 'predict', 'run_prediction_cli', 'evaluate_stint_strategy']) {
-      if (question.includes(fn)) {
-        targetSymbol = fn;
-        break;
+    // Detect explicit function/symbol mentions from the user's question.
+    // Resolve symbols against the repository instead of hardcoding repository-specific names.
+    if (targetSymbol === undefined && this.workspace.structuralIndex) {
+      const explicitSymbolMatch = question.match(/\b[a-zA-Z_][a-zA-Z0-9_]{2,}\b/g);
+
+      if (explicitSymbolMatch) {
+        const candidate = explicitSymbolMatch.find(word =>
+          this.workspace.structuralIndex!.findFunctions(word).length > 0
+        );
+
+        if (candidate) {
+          targetSymbol = candidate;
+        }
       }
     }
 
@@ -882,7 +893,7 @@ Return JSON with:
     state: InvestigationState, 
     intent: { category: string; targetSymbol?: string; searchTerms: string[] }
   ): Promise<void> {
-    if (!this.workspace.pythonAnalysisAvailable || !this.workspace.structuralIndex) {
+    if (!this.workspace.structuralIndex || !this.workspace.analysisAvailable) {
       await this.followNonPythonRelationships(state, intent.searchTerms);
       return;
     }
@@ -1254,125 +1265,171 @@ For caller queries ("Who calls that function?"):
     summary.push(`Verified ${state.evidence.length} code evidence locations`);
     const qLower = state.question.toLowerCase();
     let answerText = '';
-    const isF1Repo = this.workspace.files.has('models/predictor.py') || this.workspace.files.has('pipeline/predict.py');
+    // Build the deterministic answer from verified repository evidence.
+    // AI-OFF mode remains repository-agnostic: all paths, symbols, line numbers,
+    // and relationships are derived from the current workspace/evidence.
+    const relevantEvidence = state.evidence.slice(0, 12);
 
-    if (isF1Repo && qLower.includes('mention') && (qLower.includes('not') || qLower.includes('without'))) {
-      // "Are there any files that mention the prediction model but do not actually use it to generate predictions? Identify them and explain why."
+    const formatEvidence = (items: EvidenceItem[]): string => {
+      return items.map((e, index) => {
+        const role = e.evidenceType || e.relationshipType || e.symbolType || 'code';
+        const symbol = e.symbolName ? `\n   Symbol: \`${e.symbolName}\`` : '';
+        const snippet = e.codeSnippet
+          ? `\n   Snippet:\n   ${e.codeSnippet.split('\n').slice(0, 8).join('\n   ')}`
+          : '';
+        return `${index + 1}. \`${e.filePath}\` (Lines ${e.startLine}–${e.endLine})\n   Role: ${role}${symbol}${snippet}\n   Why: ${e.relevanceReason}`;
+      }).join('\n\n');
+    };
+
+    // Resolve exact call sites from the repository itself. This is intentionally
+    // generic: it works for any symbol/query and never assumes sample-repo names.
+    const scanWorkspace = (patterns: RegExp[]): Array<{ filePath: string; line: number; text: string }> => {
+      const matches: Array<{ filePath: string; line: number; text: string }> = [];
+      for (const filePath of this.workspace.listFiles()) {
+        const source = this.workspace.getFileLines(filePath, 1, 100000);
+        if (!source) continue;
+        const sourceLines = source.split('\n');
+        sourceLines.forEach((lineText, index) => {
+          if (patterns.some(pattern => pattern.test(lineText))) {
+            matches.push({ filePath, line: index + 1, text: lineText.trim() });
+          }
+          patterns.forEach(pattern => {
+            pattern.lastIndex = 0;
+          });
+        });
+      }
+      return matches;
+    };
+
+    const predictionCalls = scanWorkspace([
+      /\.predict\s*\(/,
+      /\bpredict\s*\(/
+    ]);
+
+    const degradationCalls = scanWorkspace([
+      /\bdegrad\w*\s*\(/,
+      /\bdegradation\b/
+    ]);
+
+    const predictionMentionFiles = (() => {
+      const result: string[] = [];
+      for (const filePath of this.workspace.listFiles()) {
+        const source = this.workspace.getFileLines(filePath, 1, 100000);
+        if (!source) continue;
+        const mentionsPrediction = /\b(prediction|predictor|predict|model)\b/i.test(source);
+        const executesPrediction = /\.predict\s*\(|\bpredict\s*\(/i.test(source);
+        if (mentionsPrediction && !executesPrediction) {
+          result.push(filePath);
+        }
+      }
+      return result.slice(0, 12);
+    })();
+
+    // Documentation/reference files are derived from the repository itself.
+    // No sample-repository filename is assumed here.
+    const predictionDocumentationFiles = predictionMentionFiles.filter(filePath =>
+      /\.(md|mdx|rst|txt|ya?ml|json)$/i.test(filePath)
+    );
+
+    // Include role-classified evidence even when it falls outside the first
+    // retrieval page, while keeping the output bounded and repository-agnostic.
+    const predictionEvidence = state.evidence.filter(e => {
+      const role = `${e.evidenceType || ''} ${e.relationshipType || ''}`.toLowerCase();
+      return role.includes('prediction') ||
+        role.includes('model') ||
+        role.includes('usage') ||
+        role.includes('caller') ||
+        role.includes('documentation') ||
+        role.includes('reference') ||
+        predictionDocumentationFiles.includes(e.filePath);
+    });
+
+    const answerEvidence = [...new Map(
+      [...predictionEvidence, ...relevantEvidence].map(e => [`${e.filePath}:${e.startLine}`, e])
+    ).values()].slice(0, 20);
+
+    if (qLower.includes('mention') && (qLower.includes('not') || qLower.includes('without'))) {
       answerText = `### Answer
-Yes. The investigation inspected all candidate files across the repository and identified 4 files that mention or reference the prediction model without directly invoking it to generate predictions: \`main.py\`, \`models/predictor.py\` (definition and training methods), \`README.md\`, and \`config/settings.yaml\`.
+The investigation distinguishes files that reference the requested concept from files that contain a verified execution call.
 
 ### Inspected Files That Mention But Do Not Use the Prediction Model
-1. \`main.py\`
-   Lines 13, 26–34
-   \`from models.predictor import LapTimePredictor\`
-   \`results = run_race_prediction_pipeline(track_name, laps)\`
-   **Why**: Imports \`LapTimePredictor\` and calls the high-level orchestration wrapper \`run_race_prediction_pipeline\`; it delegates prediction execution to the pipeline and does not invoke \`model.predict(...)\` directly.
+${predictionMentionFiles.length > 0
+  ? predictionMentionFiles.map((filePath, index) => `${index + 1}. \`${filePath}\``).join('\n')
+  : formatEvidence(relevantEvidence)}
 
-2. \`models/predictor.py\`
-   Lines 100–110, 124–127
-   \`class LapTimePredictor:\`
-   \`def train(self, training_records: List[Dict[str, Any]]) -> None:\`
-   **Why**: Defines the model class architecture and the \`train()\` method for fitting weights from historical telemetry; it trains or defines the model rather than executing predictions.
+### Verified Evidence
+${formatEvidence(relevantEvidence)}
 
-3. \`README.md\`
-   Lines 395–406
-   **Why**: Architectural documentation describing the prediction pipeline; it contains textual documentation and does not execute code.
-
-4. \`config/settings.yaml\`
-   Lines 411–415
-   \`model: "gradient_boosted_regression"\`
-   **Why**: Configuration specification defining model version metadata; it specifies settings but does not execute prediction operations.
-
-### Contrast: Actual Prediction Usages
-For comparison, the only file that **actually executes** model prediction is:
-- \`pipeline/predict.py\` (Lines 63 & 88), where \`model.predict(...)\` is actively invoked to infer lap times.`;
-    } else if (isF1Repo && (qLower.includes('which function') || qLower.includes('what function'))) {
-      // "Which function actually generates the prediction?"
+### Interpretation
+Definitions, documentation, configuration, imports, and actual call sites are kept separate according to repository evidence.`;
+    } else if (qLower.includes('which function') || qLower.includes('what function')) {
+      const functionEvidence = relevantEvidence.filter(e => e.symbolType === 'function' || e.symbolName);
       answerText = `### Answer
-Two functions are responsible for generating predictions at different architectural layers of the application:
-1. **Core Inference Method**: \`LapTimePredictor.predict\` in \`models/predictor.py\` (Lines 111–123) directly calculates the predicted lap time in seconds from telemetry feature inputs (\`score = self.bias + sum(w * x)\`).
-2. **Simulation Pipeline**: \`run_race_prediction_pipeline\` in \`pipeline/predict.py\` (Lines 48–80) orchestrates the race simulation, instantiates the model, and invokes \`model.predict(feature_vector)\` (Line 63) to infer lap times across simulated race stints.
+The verified function-level evidence found by the investigation is:
 
 ### Verified Function Implementations
-- \`models/predictor.py\`
-  Lines 111–123 (\`def predict(self, feature_vector: List[float]) -> float\`)
-  **Why**: Direct mathematical prediction inference function.
-- \`pipeline/predict.py\`
-  Lines 48–80 (\`def run_race_prediction_pipeline(track_name: str, laps: int = 50) -> Dict[str, Any]\`)
-  **Why**: Pipeline orchestration function executing stint predictions and aggregating race telemetry.`;
-    } else if (isF1Repo && (qLower.includes('degrad') || (qLower.includes('calculate') && qLower.includes('lap')))) {
-      // "How does the application calculate lap-time degradation, and where is that calculation used?"
-      answerText = `### Answer
-Lap-time degradation is calculated by \`calculate_lap_time_degradation\` in \`models/degradation.py\` (Lines 151–185). The calculation is used in \`pipeline/predict.py\` within \`run_race_prediction_pipeline\` (Lines 66–71) and \`evaluate_stint_strategy\` (Line 89).
+${formatEvidence(functionEvidence.length > 0 ? functionEvidence : relevantEvidence)}
 
-### Calculation Definition & Formula
-- \`models/degradation.py\`
-  Lines 151–185 (\`calculate_lap_time_degradation\`)
-  **Formula Breakdown**:
-  1. Base compound wear: \`linear_deg = wear_rate * tire_age_laps\` using compound coefficients (e.g. soft: 0.085, medium: 0.052, hard: 0.031).
-  2. Quadratic cliff penalty past lap 16: \`0.012 * ((tire_age_laps - 16) ** 1.8)\`.
-  3. Track temperature scaling: increases degradation by 2% per °C if track temperature exceeds 35°C.
-  4. Fuel burn-off bonus: reduces lap time by \`0.058 * tire_age_laps\` as fuel burns off.
-  5. Total degradation: \`max(0.0, (linear_deg + cliff_penalty) * temp_factor - fuel_burnoff)\`.
+The answer is derived from the repository's structural and source evidence rather than a repository-specific function-name list.`;
+    } else if (qLower.includes('degrad') || (qLower.includes('calculate') && qLower.includes('lap'))) {
+      answerText = `### Answer
+The calculation-related implementation and its verified usage locations are shown directly from repository evidence.
+
+### Formula Breakdown
+${formatEvidence(relevantEvidence)}
 
 ### Usage Locations
-1. \`pipeline/predict.py\`
-   Lines 66–71 (inside \`run_race_prediction_pipeline\`)
-   \`degradation_delta = calculate_lap_time_degradation(base_time, lap_idx, compound, track_temp)\`
-   **Why**: Called during the per-lap race simulation loop to apply tire degradation adjustments to raw model predictions.
-2. \`pipeline/predict.py\`
-   Line 89 (inside \`evaluate_stint_strategy\`)
-   \`deg = calculate_lap_time_degradation(base, lap, compound, 30.0)\`
-   **Why**: Called during strategy evaluation to compute tire wear penalties across multi-stint pit strategies.`;
-    } else if (isF1Repo && (qLower.includes('who call') || qLower.includes('caller'))) {
-      // "Who calls that function?"
+${degradationCalls.length > 0
+  ? degradationCalls.slice(0, 8).map((m, i) => `${i + 1}. \`${m.filePath}\` — Line ${m.line}\n   \`${m.text}\``).join('\n')
+  : 'No direct calculation call site was found beyond the verified evidence above.'}
+
+### Verification
+The formula and usage claims above are grounded in indexed repository source; no sample-repository formula or path is assumed.`;
+    } else if (qLower.includes('who call') || qLower.includes('caller')) {
+      const callerEvidence = relevantEvidence.filter(e =>
+        e.relationshipType === 'caller' ||
+        e.evidenceType === 'caller' ||
+        e.sourceTool === 'find_callers'
+      );
       answerText = `### Answer
-Based on the AST caller investigation:
-- \`run_race_prediction_pipeline\` is called by \`run_prediction_cli\` in \`main.py\` (Line 32).
-- \`LapTimePredictor.predict\` is called by \`run_race_prediction_pipeline\` (Line 63) and \`evaluate_stint_strategy\` (Line 88) in \`pipeline/predict.py\`.
+The investigation found the following verified caller relationships:
 
 ### Caller Hierarchy & Evidence
-1. \`main.py\`
-   Lines 26–34 (\`run_prediction_cli\`)
-   \`results = run_race_prediction_pipeline(track_name, laps)\`
-   **Why**: The CLI entry point calls \`run_race_prediction_pipeline\` to execute a race simulation.
-2. \`pipeline/predict.py\`
-   Lines 60–64 (inside \`run_race_prediction_pipeline\`)
-   \`raw_pred = model.predict(feature_vector)\`
-   **Why**: The race pipeline simulation loop calls \`model.predict\` on each lap iteration.`;
-    } else if (isF1Repo && (qLower.includes('predict') || qLower.includes('model'))) {
-      // "Where is the prediction model used?" or "First identify the model definition, then find every verified place where it is actually called for prediction. Distinguish the model definition from its usage."
+${formatEvidence(callerEvidence.length > 0 ? callerEvidence : relevantEvidence)}
+
+${predictionCalls.length > 0
+  ? `### Verified Call Sites\n${predictionCalls.slice(0, 8).map(m => `- \`${m.filePath}\` — Line ${m.line}: \`${m.text}\``).join('\n')}`
+  : ''}
+
+Only relationships supported by repository evidence are reported.`;
+    } else if (qLower.includes('predict') || qLower.includes('model')) {
+      const usageEvidence = relevantEvidence.filter(e =>
+        e.relationshipType === 'usage' ||
+        e.evidenceType === 'usage' ||
+        e.evidenceType === 'model_usage' ||
+        e.symbolName
+      );
       answerText = `### Answer
-There are 2 verified actual prediction usages in the repository, both located in \`pipeline/predict.py\`. The model itself is defined in \`models/predictor.py\` (\`LapTimePredictor\`), and caller orchestration is handled in \`main.py\`.
+The repository evidence relevant to model or prediction usage is:
 
 ### Actual prediction usages
-1. \`pipeline/predict.py\`
-   Lines 48–80 (\`run_race_prediction_pipeline\`)
-   \`raw_pred = model.predict(feature_vector)\` (Line 63)
-   **Why**: Instantiates \`LapTimePredictor\` and executes \`model.predict(...)\` inside the race simulation loop to infer lap times from telemetry features.
-2. \`pipeline/predict.py\`
-   Lines 82–92 (\`evaluate_stint_strategy\`)
-   \`base = model.predict([float(lap), 85.0, 1.0, 0.9])\` (Line 88)
-   **Why**: Instantiates \`LapTimePredictor\` and invokes \`model.predict(...)\` to evaluate multi-stint degradation pace.
+${predictionCalls.length > 0
+  ? predictionCalls.slice(0, 8).map((m, i) => `${i + 1}. \`${m.filePath}\` — Line ${m.line}\n   \`${m.text}\``).join('\n')
+  : formatEvidence(usageEvidence.length > 0 ? usageEvidence : relevantEvidence)}
 
-### Related but not prediction usage
-- \`models/predictor.py\`
-  Lines 100–123 (\`class LapTimePredictor\`, \`def predict\`)
-  **Why**: Defines the machine learning model class architecture and the mathematical implementation of the inference method (\`def predict\`); this is the model definition rather than an operational consumer call.
-- \`models/predictor.py\`
-  Lines 124–127 (\`def train\`)
-  **Why**: Defines model training (\`def train\`) to fit weights against historical records; does not generate inference predictions.
-- \`main.py\`
-  Lines 26–34 (\`run_prediction_cli\`)
-  **Why**: Imports \`LapTimePredictor\` and invokes \`run_race_prediction_pipeline\`; acts as a caller/entry-point delegating to the pipeline without calling \`model.predict(...)\` directly.
+### Related Evidence
+${formatEvidence(answerEvidence)}
 
 ### Documentation/reference
-- \`README.md\`
-  Lines 395–406
-  **Why**: Architecture documentation describing the prediction pipeline; does not execute prediction code.
-- \`config/settings.yaml\`
-  Lines 411–415
-  **Why**: Configuration file specifying model metadata (\`gradient_boosted_regression\`); does not execute prediction operations.`;
+${predictionDocumentationFiles.length > 0
+  ? predictionDocumentationFiles.map((filePath, index) => {
+      const evidence = answerEvidence.find(e => e.filePath === filePath);
+      const location = evidence ? ` (Lines ${evidence.startLine}–${evidence.endLine})` : '';
+      return `${index + 1}. \`${filePath}\`${location}\n   Why: References prediction/model concepts but contains no verified prediction execution call.`;
+    }).join('\n')
+  : 'No documentation/reference files were identified by the repository scan.'}
+
+Definitions, usages, callers, and documentation are distinguished using the evidence classification produced by the investigation engine.`;
     } else if (state.toolCalls.some(t => t.toolName === 'count_disambiguation') || state.evidence[0]?.sourceTool === 'count_disambiguation') {
       const topEvidence = state.evidence[0];
       answerText = topEvidence?.relevanceReason || `Verified count query for "${state.question}".`;
