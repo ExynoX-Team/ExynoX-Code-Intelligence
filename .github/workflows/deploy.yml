@@ -31,8 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build
-        run: npm run build
+      - - name: Build
+          run: GITHUB_PAGES=true npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

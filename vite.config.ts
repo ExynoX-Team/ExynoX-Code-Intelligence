@@ -5,7 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: '/ExynoX-Code-Intelligence/',
+    base: process.env.GITHUB_PAGES === 'true'
+  ? '/ExynoX-Code-Intelligence/'
+  : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
