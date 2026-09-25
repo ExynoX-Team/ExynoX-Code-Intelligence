@@ -3,6 +3,13 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import cors from 'cors';
+const app = express();
+app.use(cors({
+  origin: 'https://exynox-team.github.io',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-api-key']
+}));
 
 dotenv.config();
 
