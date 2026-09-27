@@ -23,7 +23,7 @@ interface AIConfigModalProps {
 
 export function AIConfigModal({ isOpen, onClose, onConfigChange }: AIConfigModalProps) {
   const [provider, setProvider] = useState<LLMProviderType>('gemini');
-  const [model, setModel] = useState<string>('gemini-3.8-flash');
+  const [model, setModel] = useState<string>('gemini-3.1-flash-lite');
   const [apiKey, setApiKey] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
   const [isValidating, setIsValidating] = useState<boolean>(false);
