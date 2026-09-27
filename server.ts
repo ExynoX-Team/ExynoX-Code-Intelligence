@@ -131,7 +131,7 @@ async function startServer() {
       availableProviders: ['gemini', 'openai', 'claude'],
       hasServerGeminiKey: !!process.env.GEMINI_API_KEY,
       defaultProvider: 'gemini',
-      defaultModel: 'gemini-3.5-flash-lite'
+      defaultModel: 'gemini-3.1-flash-lite'
     });
   });
 
@@ -162,7 +162,7 @@ async function startServer() {
           contents = messages.map((m: { role: string; content: string }) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
         }
 
-        const primaryModel = model || 'gemini-3.5-flash-lite';
+        const primaryModel = model || 'gemini-3.1-flash-lite';
         try {
           const response = await ai.models.generateContent({
             model: primaryModel,

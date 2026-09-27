@@ -16,9 +16,9 @@ import { classifyProviderError, LLMProviderError } from './llmErrors.js';
 
 export const GEMINI_MODELS: ModelOption[] = [
   {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash',
-    description: 'Optimal for code intelligence, high accuracy & low latency',
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    description: 'Lightweight and fastest response turnaround',
     recommended: true
   },
   {
@@ -27,9 +27,9 @@ export const GEMINI_MODELS: ModelOption[] = [
     description: 'Deep reasoning for complex repository analysis'
   },
   {
-    id: 'gemini-3.1-flash-lite',
-    name: 'Gemini 3.1 Flash Lite',
-    description: 'Lightweight and fastest response turnaround'
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    description: 'Optimal for code intelligence, high accuracy & low latency'
   }
 ];
 
