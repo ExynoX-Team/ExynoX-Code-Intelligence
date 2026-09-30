@@ -71,8 +71,6 @@ Instead, ExynoX progressively retrieves only the evidence required to answer a q
 
 ## 🎥 Demo Video
 
-## 🎥 Demo Video
-
 [▶️ Watch the ExynoX Code Intelligence Demo](https://drive.google.com/file/d/1lHp3Xx4LIlOMjY_iVLKTWf7x0VvgcM1i/view?usp=sharing)
 
 A short demonstration of repository ingestion, hybrid code retrieval,
